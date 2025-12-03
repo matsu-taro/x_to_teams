@@ -1,0 +1,33 @@
+name = "teams-news"
+main = "src/index.ts"
+compatibility_date = "2024-11-27"
+
+# KV Namespaceバインディング（投稿済みツイートID保存用）
+[[kv_namespaces]]
+binding = "POSTED_TWEETS"
+id = "7c42812df8524f17af92ba97627cc1b4"
+
+# Cron Triggers - 毎週月曜・木曜の朝9:00（JST）= 0:00（UTC）に実行
+# Cloudflareの曜日: 1=日曜, 2=月曜, 3=火曜, 4=水曜, 5=木曜, 6=金曜, 7=土曜
+[triggers]
+crons = ["0 0 * * 2,5"]
+
+# 環境変数の設定（実際の値は wrangler secret put で設定）
+# TWITTER_BEARER_TOKEN: X API Bearer Token
+# TEAMS_WEBHOOK_URL: Microsoft Teams Incoming Webhook URL
+
+# 開発環境用の設定
+[env.dev]
+name = "teams-news-dev"
+
+# 本番環境用の設定
+[env.production]
+name = "teams-news-production"
+
+# ログ
+[observability]
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+# persist = true

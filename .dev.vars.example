@@ -1,0 +1,7 @@
+# X (Twitter) API Bearer Token
+# https://developer.twitter.com/en/portal/dashboard で取得
+TWITTER_BEARER_TOKEN=your_twitter_bearer_token_here
+
+# Microsoft Teams Incoming Webhook URL
+# Teams チャンネルの設定から Incoming Webhook を作成して取得
+TEAMS_WEBHOOK_URL=https://your-org.webhook.office.com/webhookb2/...
