@@ -49,3 +49,51 @@ function getDateRange(daysAgo: number): { start: string; end: string } {
     end: endUTC.toISOString()
   };
 }
+
+/**
+ * 1アカウントの指定日の投稿を検索
+ */
+async function searchTweetsForAccount(
+  bearerToken: string,
+  account: string,
+  startTime: string,
+  endTime: string,
+  excludedTweetIds: Set<string>
+): Promise<NewsArticle[]> {
+  const query = `from:${account} lang:ja has:links -is:retweet -is:reply`;
+
+  const url = new URL('https://api.twitter.com/2/tweets/search/recent');
+  url.searchParams.append('query', query);
+  url.searchParams.append('start_time', startTime);
+  url.searchParams.append('end_time', endTime);
+  url.searchParams.append('max_results', '1'); // 1アカウントあたり1件/日 取得
+  url.searchParams.append('tweet.fields', 'author_id,created_at,public_metrics,entities');
+  url.searchParams.append('expansions', 'author_id');
+  url.searchParams.append('user.fields', 'username,name');
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Bearer ${bearerToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error for ${account}: ${response.status} - ${errorText}`);
+      return [];
+    }
+
+    const data: TwitterSearchResponse = await response.json();
+
+    if (!data.data || data.data.length === 0) {
+      return [];
+    }
+
+    return filterAndTransformTweets(data.data, data.includes?.users || [], excludedTweetIds);
+  } catch (error) {
+    console.error(`Tweet取得処理でエラーが発生しました ${account}:`, error);
+    return [];
+  }
+}
+
