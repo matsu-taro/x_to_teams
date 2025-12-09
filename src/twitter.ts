@@ -59,14 +59,13 @@ async function searchTweetsForAccount(
   startTime: string,
   endTime: string,
   excludedTweetIds: Set<string>
-): Promise<NewsArticle[]> {
+): Promise<{ tweets: NewsArticle[]; errors: string[] }> {
   const query = `from:${account} lang:ja has:links -is:retweet -is:reply`;
 
   const url = new URL('https://api.twitter.com/2/tweets/search/recent');
   url.searchParams.append('query', query);
   url.searchParams.append('start_time', startTime);
   url.searchParams.append('end_time', endTime);
-  url.searchParams.append('max_results', '1'); // 1アカウントあたり1件/日 取得
   url.searchParams.append('tweet.fields', 'author_id,created_at,public_metrics,entities');
   url.searchParams.append('expansions', 'author_id');
   url.searchParams.append('user.fields', 'username,name');
@@ -80,20 +79,22 @@ async function searchTweetsForAccount(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`API error for ${account}: ${response.status} - ${errorText}`);
-      return [];
+      const errorMsg = `${account}: ${response.status}`;
+      return { errors: [errorMsg], tweets: [] };
     }
 
     const data: TwitterSearchResponse = await response.json();
 
     if (!data.data || data.data.length === 0) {
-      return [];
+      return { tweets: [], errors: [] };
     }
 
-    return filterAndTransformTweets(data.data, data.includes?.users || [], excludedTweetIds);
+    return { tweets: filterAndTransformTweets(data.data, data.includes?.users || [], excludedTweetIds), errors: [] };
   } catch (error) {
     console.error(`Tweet取得処理でエラーが発生しました ${account}:`, error);
-    return [];
+    return { tweets: [], errors: [`${account}: exception`] };
+  }
+}
   }
 }
 
