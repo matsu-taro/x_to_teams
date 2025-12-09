@@ -24,7 +24,8 @@ export default {
 
       //  投稿済みツイートIDを取得、X APIで直近1週間の人気ツイートを検索（重複除外）
       const postedTweetIds = await getPostedTweetIds(env.POSTED_TWEETS);
-      const articles = await searchPopularTweets(env.TWITTER_BEARER_TOKEN, postedTweetIds);
+      const result = await searchPopularTweets(env.TWITTER_BEARER_TOKEN, postedTweetIds);
+      const articles = result.articles;
 
       // Teamsに通知
       if (articles.length > 0) {
@@ -52,7 +53,8 @@ export default {
       try {
         //  投稿済みツイートIDを取得、X APIで直近1週間の人気ツイートを検索（重複除外）
         const postedTweetIds = await getPostedTweetIds(env.POSTED_TWEETS);
-        const articles = await searchPopularTweets(env.TWITTER_BEARER_TOKEN, postedTweetIds);
+        const result = await searchPopularTweets(env.TWITTER_BEARER_TOKEN, postedTweetIds);
+        const articles = result.articles;
 
         // Teamsに通知
         if (articles.length > 0) {
@@ -69,6 +71,11 @@ export default {
             already_posted_count: postedTweetIds.size,
             new_articles_count: articles.length,
             articles: articles,
+            debug: {
+              bearer_token_length: env.TWITTER_BEARER_TOKEN?.length || 0,
+              bearer_token_prefix: env.TWITTER_BEARER_TOKEN?.substring(0, 20) || 'missing',
+              errors: result.errors,
+            },
           }),
           {
             headers: { 'Content-Type': 'application/json' },
