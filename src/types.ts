@@ -56,7 +56,6 @@ export interface NewsArticle {
   url: string;
   author_name: string;
   author_username: string;
-  followers_count: number;
   like_count: number;
   retweet_count: number;
   created_at: string;
