@@ -95,6 +95,104 @@ async function searchTweetsForAccount(
     return { tweets: [], errors: [`${account}: exception`] };
   }
 }
-  }
+
+/**
+ * 直近3日間から人気ツイートを検索
+ * 1周目: 全アカウントの前日投稿
+ * 2周目: 全アカウントの2日前投稿（5件に満たない場合）
+ */
+export interface SearchResult {
+  articles: NewsArticle[];
+  errors: string[];
 }
 
+export async function searchPopularTweets(bearerToken: string, excludedTweetIds: Set<string> = new Set()): Promise<SearchResult> {
+  console.log('searchPopularTweets started');
+  const allArticles: NewsArticle[] = [];
+  const TARGET_COUNT = 5;
+  const errors: string[] = [];
+
+  // 1日目から2日目まで遡る
+  for (let daysAgo = 1; daysAgo <= 2; daysAgo++) {
+    const { start, end } = getDateRange(daysAgo);
+    // 各アカウントから投稿を取得
+    for (const account of TARGET_ACCOUNTS) {
+      // 既に5件集まっていたら終了
+      if (allArticles.length >= TARGET_COUNT) {
+        break;
+      }
+
+      const result = await searchTweetsForAccount(bearerToken, account, start, end, excludedTweetIds);
+      if (result.errors.length > 0) {
+        errors.push(...result.errors);
+      }
+
+      if (result.tweets.length > 0) {
+        // 1アカウントあたり1件のみ追加（多様性確保）
+        allArticles.push(result.tweets[0]);
+      }
+    }
+
+    // 5件集まったら終了
+    if (allArticles.length >= TARGET_COUNT) {
+      break;
+    }
+  }
+
+  // いいね数でソート
+  allArticles.sort((a, b) => b.like_count - a.like_count);
+  const topArticles = allArticles.slice(0, TARGET_COUNT);
+
+  return { articles: topArticles, errors };
+}
+
+/**
+ * ツイートをフィルタリングして記事情報に変換
+ */
+function filterAndTransformTweets(tweets: Tweet[], users: TwitterUser[], excludedTweetIds: Set<string>): NewsArticle[] {
+  const userMap = new Map(users.map(u => [u.id, u]));
+  const articles: NewsArticle[] = [];
+
+  for (const tweet of tweets) {
+    // 既に投稿済みのツイートはスキップ
+    if (excludedTweetIds.has(tweet.id)) {
+      continue;
+    }
+
+    const user = userMap.get(tweet.author_id);
+    if (!user) continue;
+
+    // URLが含まれていること（has:links で既にフィルタ済みだが念のため確認）
+    const urls = tweet.entities?.urls;
+    if (!urls || urls.length === 0) {
+      continue;
+    }
+
+    // 展開されたURLを取得（t.coではなく元のURL）
+    const expandedUrl = urls.find(u => u.expanded_url)?.expanded_url || urls[0].url;
+
+    // メトリクスを取得
+    const likeCount = tweet.public_metrics?.like_count || 0;
+    const retweetCount = tweet.public_metrics?.retweet_count || 0;
+
+    articles.push({
+      tweet_id: tweet.id,
+      text: tweet.text,
+      url: expandedUrl,
+      author_name: user.name,
+      author_username: user.username,
+      like_count: likeCount,
+      retweet_count: retweetCount,
+      created_at: tweet.created_at,
+    });
+  }
+
+  return articles;
+}
+
+/**
+ * ツイートのURLを生成
+ */
+export function getTweetUrl(username: string, tweetId: string): string {
+  return `https://twitter.com/${username}/status/${tweetId}`;
+}
