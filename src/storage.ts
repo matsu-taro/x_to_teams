@@ -20,3 +20,35 @@ export async function getPostedTweetIds(kv: KVNamespace): Promise<Set<string>> {
   }
   return new Set();
 }
+
+/**
+ * 新しいツイートIDを追加して保存
+ */
+export async function addPostedTweetIds(
+  kv: KVNamespace,
+  existingIds: Set<string>,
+  newIds: string[]
+): Promise<void> {
+  try {
+    // 既存のIDと新しいIDをマージ
+    const allIds = new Set([...existingIds, ...newIds]);
+
+    // 配列に変換してKVに保存（7日間のTTL）
+    const expirationTtl = 60 * 60 * 24 * EXPIRATION_DAYS; // 秒単位
+    await kv.put(POSTED_TWEETS_KEY, JSON.stringify([...allIds]), {
+      expirationTtl,
+    });
+
+    console.log(`Saved ${allIds.size} tweet IDs to KV (${newIds.length} new)`);
+  } catch (error) {
+    console.error('Error saving posted tweet IDs:', error);
+    throw error;
+  }
+}
+
+/**
+ * 特定のツイートIDが既に投稿済みかチェック
+ */
+export function isAlreadyPosted(postedIds: Set<string>, tweetId: string): boolean {
+  return postedIds.has(tweetId);
+}

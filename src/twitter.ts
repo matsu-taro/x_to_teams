@@ -112,8 +112,8 @@ export async function searchPopularTweets(bearerToken: string, excludedTweetIds:
   const TARGET_COUNT = 5;
   const errors: string[] = [];
 
-  // 1日目から2日目まで遡る
-  for (let daysAgo = 1; daysAgo <= 2; daysAgo++) {
+  // 前日のみ検索（API quota節約）
+  for (let daysAgo = 1; daysAgo <= 1; daysAgo++) {
     const { start, end } = getDateRange(daysAgo);
     // 各アカウントから投稿を取得
     for (const account of TARGET_ACCOUNTS) {
