@@ -51,16 +51,16 @@ function getDateRange(daysAgo: number): { start: string; end: string } {
 }
 
 /**
- * 1アカウントの指定日の投稿を検索
+ * 対象アカウント群の指定日の投稿をまとめて検索（APIコールを最小化）
  */
-async function searchTweetsForAccount(
+async function searchTweetsForAccounts(
   bearerToken: string,
-  account: string,
   startTime: string,
   endTime: string,
   excludedTweetIds: Set<string>
 ): Promise<{ tweets: NewsArticle[]; errors: string[] }> {
-  const query = `from:${account} lang:ja has:links -is:retweet -is:reply`;
+  const accountQuery = TARGET_ACCOUNTS.map(account => `from:${account}`).join(' OR ');
+  const query = `(${accountQuery}) lang:ja has:links -is:retweet -is:reply`;
 
   const url = new URL('https://api.twitter.com/2/tweets/search/recent');
   url.searchParams.append('query', query);
@@ -69,6 +69,7 @@ async function searchTweetsForAccount(
   url.searchParams.append('tweet.fields', 'author_id,created_at,public_metrics,entities');
   url.searchParams.append('expansions', 'author_id');
   url.searchParams.append('user.fields', 'username,name');
+  url.searchParams.append('max_results', '50');
 
   try {
     const response = await fetch(url.toString(), {
@@ -79,7 +80,7 @@ async function searchTweetsForAccount(
 
     if (!response.ok) {
       const errorText = await response.text();
-      const errorMsg = `${account}: ${response.status}`;
+      const errorMsg = `search/recent: ${response.status} ${errorText}`;
       return { errors: [errorMsg], tweets: [] };
     }
 
@@ -91,15 +92,14 @@ async function searchTweetsForAccount(
 
     return { tweets: filterAndTransformTweets(data.data, data.includes?.users || [], excludedTweetIds), errors: [] };
   } catch (error) {
-    console.error(`Tweet取得処理でエラーが発生しました ${account}:`, error);
-    return { tweets: [], errors: [`${account}: exception`] };
+    console.error('Tweet取得処理でエラーが発生しました:', error);
+    return { tweets: [], errors: ['search/recent: exception'] };
   }
 }
 
 /**
- * 直近3日間から人気ツイートを検索
- * 1周目: 全アカウントの前日投稿
- * 2周目: 全アカウントの2日前投稿（5件に満たない場合）
+ * 直近1日分から人気ツイートを検索
+ * 1回のAPIコールで対象アカウントをまとめて取得
  */
 export interface SearchResult {
   articles: NewsArticle[];
@@ -108,40 +108,20 @@ export interface SearchResult {
 
 export async function searchPopularTweets(bearerToken: string, excludedTweetIds: Set<string> = new Set()): Promise<SearchResult> {
   console.log('searchPopularTweets started');
-  const allArticles: NewsArticle[] = [];
-  const TARGET_COUNT = 5;
+  const TARGET_COUNT = 3;
   const errors: string[] = [];
 
   // 前日のみ検索（API quota節約）
-  for (let daysAgo = 1; daysAgo <= 1; daysAgo++) {
-    const { start, end } = getDateRange(daysAgo);
-    // 各アカウントから投稿を取得
-    for (const account of TARGET_ACCOUNTS) {
-      // 既に5件集まっていたら終了
-      if (allArticles.length >= TARGET_COUNT) {
-        break;
-      }
-
-      const result = await searchTweetsForAccount(bearerToken, account, start, end, excludedTweetIds);
-      if (result.errors.length > 0) {
-        errors.push(...result.errors);
-      }
-
-      if (result.tweets.length > 0) {
-        // 1アカウントあたり1件のみ追加（多様性確保）
-        allArticles.push(result.tweets[0]);
-      }
-    }
-
-    // 5件集まったら終了
-    if (allArticles.length >= TARGET_COUNT) {
-      break;
-    }
+  const { start, end } = getDateRange(1);
+  const result = await searchTweetsForAccounts(bearerToken, start, end, excludedTweetIds);
+  if (result.errors.length > 0) {
+    errors.push(...result.errors);
   }
 
-  // いいね数でソート
-  allArticles.sort((a, b) => b.like_count - a.like_count);
-  const topArticles = allArticles.slice(0, TARGET_COUNT);
+  // 投稿ID重複を除外しつつ、いいね数でソート
+  const uniqueArticles = Array.from(new Map(result.tweets.map(tweet => [tweet.tweet_id, tweet])).values());
+  uniqueArticles.sort((a, b) => b.like_count - a.like_count);
+  const topArticles = uniqueArticles.slice(0, TARGET_COUNT);
 
   return { articles: topArticles, errors };
 }
